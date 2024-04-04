@@ -1,0 +1,29 @@
+dograce_year="2024"
+dograce_hello=$(yellow "=== Psí závody (c) $dograce_year Tomáš Pitner ===")
+dograce_bye=$(yellow "=== Nashledanou příště! ===")
+race="Závod"
+race_printed="Výsledky spočteny"
+dog_handler_team="Tým"
+count_dogs="Počet týmů"
+start_number="Startovní číslo"
+category_msg="Kategorie"
+handler_name="Jméno psovoda"
+dog_name="Jméno psa"
+dog_breed="Plemeno"
+discipline_msg="Disciplína"
+exercise="Cviky"
+run1time="Čas 1"
+run2time="Čas 2"
+elapsed_time="Čas posledního běhu"
+sum="Součet" 
+rank="Pořadí"
+fault_count="Chyb"
+point_count="Bodů"
+disqualified="Diskvalifikace"
+save_sanitized_msg="Uložit vyčištěná data? [S]" 
+save_results_msg="Seřadit výsledky a generovat výsledkovku? [S]" 
+
+menu_main_full="$(hilite c) kateg, $(hilite l) jeden, $(hilite a) celou kateg, \
+$(hilite '<>') disciplína, $(hilite 'nm') start/stop, $(hilite 'fF') chyba/-, \
+$(hilite 'dD') diskvalif/-, $(hilite 'pP') bod/-, $(hilite 'C') zapsat, \
+$(hilite 'rR') výsledky/ukaž, $(hilite q) konec"' '

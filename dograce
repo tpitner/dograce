@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+#
+
+# Color and formatting
+source ansi.bash
+# Time operations 
+source timelib.bash
+# Menu utils
+source dialogs.bash
+# Text utils
+source textlib.bash
+# Localization
+source l10n.bash
+
+# -----------------
+# MAIN
+# -----------------
+
+# config this race: name: $1, type: $2
+test -f "$1" \
+    && race_name=$(basename "$1") \
+    || race_name="race"
+test -f "$2" \
+    && race_type="$2" \
+    || race_type="${app_name}_tunnels"
+
+# echo Race $race_name type $race_type 
+source "$race_type"
+
+# input file with race data in CSV
+race_data="$race_name.csv"
+out_race_data="out-"$race_data
+sanitized_race_data="sanitized-"$race_data
+sorted_race_data="sorted-"$race_data
+hist_race_data="hist-"$race_data
+race_md="$race_name.md"
+race_print_ext="html"
+race_print="$race_md.$race_print_ext"
+
+# Show main menu
+echo -e $dograce_hello
+echo -e $race $race_type_name, data \'$race_data\'
+dog_min_number=1
+dog_number=1
+dog_max_number=$(wc -l "$race_data" | cut -w -f 2,2)
+let dog_count=($dog_max_number - $dog_min_number + 1)
+discipline=0
+category=0
+faults=0
+points=0
+elapsed_mm_ss_d="00:00.0"
+faults_disqualified=100
+while true; do
+    # echo ""
+    quick_menu "$menu_main_full" key
+    # echo ""
+    case $key in
+
+        a) # show all dogs SML
+           awk -v varCategory="${categories[$category]}" "${show_cat_templates[$discipline]}" "$race_data" 
+           echo -e "$count_dogs" $(green ${categories[category]})":" $(green $dog_count) \
+                   "| $discipline_msg:" $(green ${disciplines[discipline]})
+           echo -e "$point_count: $(green $points) | $fault_count: $(green $faults) | $elapsed_time: $(green $elapsed_mm_ss_d)"; 
+           ;;
+
+        C) # change 1 dog
+           new_value=$(new_value_by_discipline)
+           awk -v OFS=',' \
+               -v varDogNumber="$dog_number" \
+               -v varValue="$new_value" \
+               "${change_templates[$discipline]}" "$race_data" \
+           | tee "$out_race_data" \
+           | awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}"
+           
+           confirm "Really save? [y/N]" 
+           [[ "$last_confirm" =~ ([yYC]) ]] && mv "$out_race_data" "$race_data" && ok
+           ;;
+
+        c) # next category
+           category=$(( (category + 1) % ${#categories[@]} ))
+           read dog_min_number dog_max_number <<< \
+                $(awk -v varCategory="${categories[$category]}" \
+                      "$count_dogs_in_category_command" "$race_data")
+                    
+           let dog_number=$dog_min_number
+           let dog_count=($dog_max_number - $dog_min_number + 1)
+           echo -e "$count_dogs " $(green ${categories[category]}) ": " $(green $dog_count)
+           ;;
+
+        D) # Disqualification--
+           [[ $faults -ge $faults_disqualified ]] && let faults=($faults - $faults_disqualified)
+           echo -e $disqualified $(red $faults)
+           ;;
+
+        d) # Disqualification++
+           let faults=($faults + $faults_disqualified)
+           [[ $faults -ge $faults_disqualified ]] && echo -e $disqualified $(red $faults)
+           ;;
+
+        E) # Edit raw race data
+           vim "$race_data"
+           ;;
+
+        f) # Fault encountered
+           let faults=($faults + $faults_inc)
+           test $faults -ge $max_faults && faults=$max_faults
+           echo -e "+" $fault_count: $(green $faults)
+           ;;
+
+        F) # undo fault 
+           let faults=($faults - $faults_inc)
+           test $faults -le 0 && faults=0
+           echo -e "-" $fault_count: $(green $faults)
+           ;;
+
+        h | u) # show usage
+           echo "Usage: dograce <race_data> <race_type>" 
+           ;;
+
+        l) # show 1 dog
+           awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}" "$race_data"
+           echo -e "$point_count: $(green $points) | $fault_count: $(green $faults) | $elapsed_time: $(green $elapsed_mm_ss_d)"; 
+           ;;
+
+        n) # start timiNg
+           start_time=$(now_time) 
+           echo "Start: "$(green ${start_time:0:10})
+           ;; 
+           
+        m) # stop tiMing
+           end_time=$(now_time)
+           elapsed=$(($(time_to_ms "$end_time")-$(time_to_ms "$start_time")))
+           elapsed_mm_ss_d=$(to_mm_ss_d $elapsed)
+           echo "Finish: "$(green ${end_time:0:10})", elapsed $elapsed ms = "$(red $elapsed_mm_ss_d)
+           ;; 
+
+        p) # point gained
+           let points=($points + $points_inc)
+           test $points -ge $max_points && points=$max_points
+           echo -e "$point_count: $(yellow $points)"
+           ;;
+
+        P) # undo point 
+           let points=($points - $points_inc)
+           test $points -le 0 && points=0
+           echo -e "$point_count: $(yellow $points)"
+           ;;
+
+        q|Q) # Quit
+           break 
+           ;;
+
+        r) # Create the result list for $category 
+           category_name="${categories[$category]}"
+           awk -v OFS=',' \
+               -v varCategory="$category_name" \
+               "$sum_runtimes_cat" "$race_data" \
+           | tee "$out_race_data" \
+           | awk -v varCategory="$category_name" \
+               "${show_cat_templates[$discipline]}"
+           
+           # Save summed list and history
+            mv "$race_data" "$hist_race_data"
+            mv "$out_race_data" "$race_data"
+
+            # Sort, save sorted and show
+            awk -v varCategory="$category_name" \
+                "$filter_cat" "$race_data" \
+            | $sort_command \
+            | tee "sorted-$category_name-$race_data" \
+            | awk -v varCategory="$category_name" \
+                    "${show_cat_templates[$discipline]}"
+           ;;
+
+        R) # Render and show results
+           echo "$race_type_descr" > "$race_md"
+           for category_for_result in "${categories_for_results[@]}"; do
+                sorted_file="sorted-$category_for_result-$race_data"
+                [[ -e $sorted_file && -r $sorted_file ]] && \
+                    (echo " "; \
+                     echo "# $category_msg $category_for_result"; \
+                     echo "$result_header"; \
+                     echo "$result_separator"; \
+                     awk "$result_item" "$sorted_file"
+                    ) >> "$race_md"
+           done
+           pandoc -f markdown -t html5 -s --css=styling.css \
+                  --metadata title="$race_title" \
+                  -o "$race_print" "$race_md" 
+           open "$race_print"
+           ;;
+
+        S) # Sanitize input race data, ie. put defaults on missing
+           awk -v OFS=',' "$sanitize_command" "$race_data" \
+           | tee "$sanitized_race_data"
+
+           confirm "$save_sanitized_msg"
+           [[ "$last_confirm" == "S" ]] && mv "$sanitized_race_data" "$race_data" && ok
+           ;;
+
+        v) # View raw race data
+           view "$race_data"
+           ;;
+
+        $'\x1b') # ESC key sequences, such as arrow keys
+            read -s -n 2 esc_key
+            case $esc_key in 
+            $'\x5b\x41') # prev dog
+                let dog_number--
+                test $dog_number -le $dog_min_number && dog_number=$dog_min_number
+                awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}" "$race_data"
+                ;;
+
+            $'\x5b\x42') # next dog
+                let dog_number++
+                test $dog_number -ge $dog_max_number && dog_number=$dog_max_number
+                awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}" "$race_data"
+                ;;
+            
+            $'\x5b\x43') 
+                # next discipline
+                let discipline++
+                max_index=$((${#disciplines[@]} - 1))
+                test $discipline -gt $max_index && discipline=$max_index
+                awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}" "$race_data"
+                ;;
+            
+            $'\x5b\x44') 
+                # previous discipline
+                let discipline--
+                test $discipline -lt 0 && discipline=0
+                awk -v varDogNumber="$dog_number" "${show_one_templates[$discipline]}" "$race_data"
+                ;;
+
+            *) 
+                echo -n "$esc_key" | od -A n -t x1 
+                ;;
+            esac
+            ;;
+
+        *) echo -n "$key" | od -A n -t x1
+           ;;
+    esac
+done
+echo -e $dograce_bye

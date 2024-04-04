@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+source timelib.bash
+let sum_millis=$(to_millis "$1")+$(to_millis "$2")
+to_mm_ss_d "$sum_millis"
